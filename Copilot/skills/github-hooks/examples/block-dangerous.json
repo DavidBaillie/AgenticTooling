@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "hooks": {
+    "preToolUse": [
+      {
+        "type": "command",
+        "bash": "./.github/hooks/scripts/block-dangerous.sh",
+        "cwd": ".",
+        "timeoutSec": 5,
+        "env": {
+          "BLOCK_MODE": "deny"
+        }
+      }
+    ]
+  }
+}

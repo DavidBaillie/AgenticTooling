@@ -1,0 +1,212 @@
+name: Advanced Matrix Strategy
+
+# Demonstrate comprehensive matrix testing across multiple dimensions
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  # Test across multiple OS, Node versions, and browsers
+  matrix-test:
+    runs-on: ${{ matrix.os }}
+    
+    strategy:
+      # Don't cancel all matrix jobs if one fails
+      fail-fast: false
+      
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        node-version: [16, 18, 20]
+        browser: [chromium, firefox]
+        
+        # Exclude specific combinations
+        exclude:
+          # Skip Firefox on Windows (known compatibility issues)
+          - os: windows-latest
+            browser: firefox
+        
+        # Add extra configurations
+        include:
+          # Add experimental WebKit testing only on Ubuntu with Node 20
+          - os: ubuntu-latest
+            node-version: 20
+            browser: webkit
+            experimental: true
+    
+    # Mark experimental jobs as allowed to fail
+    continue-on-error: ${{ matrix.experimental == true }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@3235b876344d2a9aa001b8d1453c930bba69e610 # v3.9.1
+        with:
+          node-version: ${{ matrix.node-version }}
+      
+      - name: Cache dependencies
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ matrix.node-version }}-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-${{ matrix.node-version }}-
+            ${{ runner.os }}-node-
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Install Playwright browsers
+        run: npx playwright install ${{ matrix.browser }} --with-deps
+      
+      - name: Run unit tests
+        run: npm run test:unit
+      
+      - name: Run E2E tests with ${{ matrix.browser }}
+        run: npx playwright test --project=${{ matrix.browser }}
+      
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: test-results-${{ matrix.os }}-node${{ matrix.node-version }}-${{ matrix.browser }}
+          path: test-results/
+          retention-days: 7
+      
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: playwright-report-${{ matrix.os }}-${{ matrix.browser }}
+          path: playwright-report/
+          retention-days: 7
+
+  # Matrix for database compatibility testing
+  database-matrix:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        database:
+          - name: postgres
+            version: '14'
+            port: 5432
+          - name: postgres
+            version: '15'
+            port: 5432
+          - name: mysql
+            version: '8.0'
+            port: 3306
+    
+    services:
+      database:
+        image: ${{ matrix.database.name }}:${{ matrix.database.version }}
+        env:
+          POSTGRES_PASSWORD: postgres
+          MYSQL_ROOT_PASSWORD: mysql
+        ports:
+          - ${{ matrix.database.port }}:${{ matrix.database.port }}
+        options: >-
+          --health-cmd "${{ matrix.database.name == 'postgres' && 'pg_isready' || 'mysqladmin ping' }}"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@3235b876344d2a9aa001b8d1453c930bba69e610 # v3.9.1
+        with:
+          node-version: 18
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run migration tests
+        env:
+          DATABASE_URL: ${{ matrix.database.name }}://localhost:${{ matrix.database.port }}
+        run: npm run test:migrations
+      
+      - name: Run integration tests
+        env:
+          DATABASE_URL: ${{ matrix.database.name }}://localhost:${{ matrix.database.port }}
+        run: npm run test:integration
+
+  # Conditional matrix based on changed files
+  conditional-matrix:
+    runs-on: ubuntu-latest
+    
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 2
+      
+      - name: Detect changed services
+        id: set-matrix
+        run: |
+          CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
+          
+          SERVICES='[]'
+          if echo "$CHANGED_FILES" | grep -q '^services/auth/'; then
+            SERVICES=$(echo "$SERVICES" | jq '. + ["auth"]')
+          fi
+          if echo "$CHANGED_FILES" | grep -q '^services/api/'; then
+            SERVICES=$(echo "$SERVICES" | jq '. + ["api"]')
+          fi
+          if echo "$CHANGED_FILES" | grep -q '^services/worker/'; then
+            SERVICES=$(echo "$SERVICES" | jq '. + ["worker"]')
+          fi
+          
+          # If no specific services changed, test all
+          if [ "$SERVICES" = "[]" ]; then
+            SERVICES='["auth", "api", "worker"]'
+          fi
+          
+          echo "matrix={\"service\":$SERVICES}" >> $GITHUB_OUTPUT
+  
+  test-changed-services:
+    needs: conditional-matrix
+    if: needs.conditional-matrix.outputs.matrix != '{"service":[]}'
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix: ${{ fromJson(needs.conditional-matrix.outputs.matrix) }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      
+      - name: Test ${{ matrix.service }} service
+        run: |
+          echo "Testing ${{ matrix.service }} service..."
+          npm run test --workspace=services/${{ matrix.service }}
+
+  # Aggregate results from matrix
+  matrix-results:
+    needs: [matrix-test, database-matrix]
+    if: always()
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Check matrix test results
+        run: |
+          if [ "${{ needs.matrix-test.result }}" != "success" ]; then
+            echo "❌ Matrix tests failed"
+            exit 1
+          fi
+          if [ "${{ needs.database-matrix.result }}" != "success" ]; then
+            echo "❌ Database tests failed"
+            exit 1
+          fi
+          echo "✅ All matrix tests passed"

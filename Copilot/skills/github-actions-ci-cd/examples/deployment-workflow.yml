@@ -1,0 +1,276 @@
+name: Complete Deployment Pipeline
+
+# Full deployment workflow with staging and production
+on:
+  push:
+    branches: [main, develop]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+
+permissions:
+  contents: read
+
+jobs:
+  # Build once, deploy everywhere
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    
+    outputs:
+      version: ${{ steps.version.outputs.tag }}
+      image: ${{ steps.build.outputs.image }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@3235b876344d2a9aa001b8d1453c930bba69e610 # v3.9.1
+        with:
+          node-version: 18
+      
+      - name: Cache dependencies
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run tests
+        run: npm test
+      
+      - name: Build application
+        run: npm run build
+      
+      - name: Generate version tag
+        id: version
+        run: |
+          VERSION="v$(date +%Y%m%d)-${{ github.run_number }}"
+          echo "tag=$VERSION" >> $GITHUB_OUTPUT
+      
+      - name: Build Docker image
+        id: build
+        run: |
+          IMAGE="ghcr.io/${{ github.repository }}:${{ steps.version.outputs.tag }}"
+          docker build -t "$IMAGE" .
+          docker tag "$IMAGE" "ghcr.io/${{ github.repository }}:latest"
+          echo "image=$IMAGE" >> $GITHUB_OUTPUT
+      
+      - name: Login to GitHub Container Registry
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+      
+      - name: Push Docker image
+        run: |
+          docker push ghcr.io/${{ github.repository }}:${{ steps.version.outputs.tag }}
+          docker push ghcr.io/${{ github.repository }}:latest
+      
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: build-${{ steps.version.outputs.tag }}
+          path: dist/
+          retention-days: 30
+
+  # Deploy to staging automatically on develop branch
+  deploy-staging:
+    needs: build
+    if: github.ref == 'refs/heads/develop' || github.event.inputs.environment == 'staging'
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: https://staging.example.com
+    permissions:
+      id-token: write
+      contents: read
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4.0.2
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_STAGING }}
+          aws-region: us-east-1
+      
+      - name: Download build artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: build-${{ needs.build.outputs.version }}
+          path: dist/
+      
+      - name: Deploy to staging
+        run: |
+          echo "Deploying ${{ needs.build.outputs.image }} to staging..."
+          kubectl set image deployment/myapp \
+            myapp=${{ needs.build.outputs.image }} \
+            --record
+          
+          kubectl rollout status deployment/myapp --timeout=5m
+      
+      - name: Run smoke tests
+        run: |
+          echo "Running smoke tests against staging..."
+          curl -f https://staging.example.com/health || exit 1
+          curl -f https://staging.example.com/api/health || exit 1
+      
+      - name: Run E2E tests against staging
+        run: |
+          npx playwright test --config=playwright.staging.config.ts
+      
+      - name: Upload E2E results
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: e2e-staging-${{ needs.build.outputs.version }}
+          path: playwright-report/
+
+  # Deploy to production with manual approval
+  deploy-production:
+    needs: [build, deploy-staging]
+    if: github.ref == 'refs/heads/main' || github.event.inputs.environment == 'production'
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://example.com
+    permissions:
+      id-token: write
+      contents: read
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4.0.2
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_PRODUCTION }}
+          aws-region: us-east-1
+      
+      - name: Download build artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: build-${{ needs.build.outputs.version }}
+          path: dist/
+      
+      - name: Backup current deployment
+        run: |
+          kubectl get deployment myapp -o yaml > deployment-backup.yaml
+      
+      - name: Deploy to production (rolling update)
+        id: deploy
+        run: |
+          echo "Deploying ${{ needs.build.outputs.image }} to production..."
+          kubectl set image deployment/myapp \
+            myapp=${{ needs.build.outputs.image }} \
+            --record
+          
+          kubectl rollout status deployment/myapp --timeout=10m
+      
+      - name: Post-deployment health checks
+        id: health_check
+        run: |
+          echo "Waiting for pods to stabilize..."
+          sleep 30
+          
+          echo "Running health checks..."
+          for i in {1..5}; do
+            if curl -f https://example.com/health && \
+               curl -f https://example.com/api/health; then
+              echo "✅ Health checks passed"
+              exit 0
+            fi
+            echo "Attempt $i failed, retrying..."
+            sleep 10
+          done
+          echo "❌ Health checks failed"
+          exit 1
+      
+      - name: Run smoke tests
+        run: |
+          curl -f https://example.com/api/version
+          # Add more smoke tests as needed
+      
+      - name: Tag successful deployment
+        if: success()
+        run: |
+          git tag ${{ needs.build.outputs.version }}
+          git push origin ${{ needs.build.outputs.version }}
+      
+      - name: Automatic rollback on failure
+        if: failure() && (steps.deploy.conclusion == 'success' || steps.health_check.conclusion == 'failure')
+        run: |
+          echo "🚨 Deployment failed, rolling back..."
+          kubectl rollout undo deployment/myapp
+          kubectl rollout status deployment/myapp
+          
+          # Send alert
+          curl -X POST ${{ secrets.SLACK_WEBHOOK }} \
+            -H 'Content-Type: application/json' \
+            -d '{
+              "text": "🚨 Production deployment failed and was automatically rolled back",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Deployment Rollback*\nVersion: ${{ needs.build.outputs.version }}\nTriggered by: ${{ github.actor }}"
+                  }
+                }
+              ]
+            }'
+      
+      - name: Notify deployment success
+        if: success()
+        run: |
+          curl -X POST ${{ secrets.SLACK_WEBHOOK }} \
+            -H 'Content-Type: application/json' \
+            -d '{
+              "text": "✅ Production deployment successful",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Deployment Complete*\nVersion: ${{ needs.build.outputs.version }}\nURL: https://example.com"
+                  }
+                }
+              ]
+            }'
+
+  # Post-deployment monitoring
+  monitor-production:
+    needs: deploy-production
+    if: success()
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Monitor for 5 minutes
+        run: |
+          echo "Monitoring production metrics..."
+          END_TIME=$(($(date +%s) + 300))
+          
+          while [ $(date +%s) -lt $END_TIME ]; do
+            ERROR_RATE=$(curl -s "https://prometheus.example.com/api/v1/query?query=rate(http_requests_total{status=~'5..',env='production'}[1m])" | jq '.data.result[0].value[1]' || echo "0")
+            
+            if (( $(echo "$ERROR_RATE > 0.05" | bc -l) )); then
+              echo "❌ High error rate detected: $ERROR_RATE"
+              exit 1
+            fi
+            
+            echo "✅ Error rate OK: $ERROR_RATE"
+            sleep 30
+          done
+          
+          echo "✅ Monitoring complete, no issues detected"
