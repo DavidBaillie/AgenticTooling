@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Container-aware card</title>
+  <style>
+    :root {
+      --space-md: 1.5rem;
+      --color-border: #c7cbd1;
+      --color-surface: #ffffff;
+      --color-featured: #e8f1ff;
+      --color-text: #17202a;
+    }
+
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: var(--space-md);
+      color: var(--color-text);
+      font: 1rem/1.5 system-ui, sans-serif;
+    }
+
+    .card-region {
+      inline-size: min(100%, 44rem);
+      margin-inline: auto;
+      container: card / inline-size;
+      --featured: true;
+    }
+
+    .card-region[data-featured] .card {
+      background: var(--color-featured);
+    }
+
+    .card {
+      display: flex;
+      flex-direction: column;
+      gap: clamp(0.5rem, 2cqw, 1rem);
+      padding: clamp(1rem, 3cqw, 1.5rem);
+      border: 1px solid var(--color-border);
+      background: var(--color-surface);
+    }
+
+    .card-thumbnail {
+      aspect-ratio: 4 / 3;
+      background: #d9e0e8;
+    }
+
+    .card-content {
+      min-width: 0;
+    }
+
+    @container card (min-width: 400px) {
+      .card {
+        flex-direction: row;
+      }
+
+      .card-thumbnail {
+        flex: 0 0 clamp(100px, 15cqw, 200px);
+      }
+    }
+
+    @container card style(--featured: true) {
+      .card {
+        border-color: #4778b8;
+      }
+    }
+
+    @supports not (container-type: inline-size) {
+      .card-region[data-featured] .card {
+        border-color: #4778b8;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="card-region" data-featured>
+    <article class="card">
+      <div class="card-thumbnail" aria-hidden="true"></div>
+      <div class="card-content">
+        <h1>Container-aware card</h1>
+        <p>This card changes layout based on its available container width.</p>
+      </div>
+    </article>
+  </main>
+</body>
+</html>
