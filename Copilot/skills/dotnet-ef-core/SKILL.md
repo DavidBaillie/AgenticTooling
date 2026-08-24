@@ -19,7 +19,6 @@ Your goal is to help me follow best practices when working with Entity Framework
 ### References
 - **Common Mistakes**: See [anti-patterns.md](references/anti-patterns.md) for what NOT to do with before/after examples
 - **Performance Review**: See [performance-checklist.md](references/performance-checklist.md) for systematic optimization checklist
-- **Testing Guide**: See [testing-strategies.md](references/testing-strategies.md) for unit and integration testing patterns
 - **Migration Workflow**: See [migration-guide.md](references/migration-guide.md) for creating and deploying migrations
 
 ## Data Context Design
