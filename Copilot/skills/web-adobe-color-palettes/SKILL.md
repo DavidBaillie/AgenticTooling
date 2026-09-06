@@ -1,6 +1,6 @@
 ---
 name: web-adobe-color-palettes
-description: 'Use when searching Adobe Color palettes by keyword through the Adobe Color Search API, parsing theme and swatch JSON, extracting palette HEX values, or making every matching palette available to the current request. Uses the keyword as the unique search constraint and supports paginated API results.'
+description: 'Use when searching color palettes by keyword through the Adobe Color Search API, parsing theme and swatch JSON, extracting palette HEX values, or making every matching palette available to the current request. Uses the keyword as the unique search constraint and supports paginated API results.'
 ---
 
 # Adobe Color Palettes
