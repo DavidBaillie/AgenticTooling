@@ -1,64 +1,67 @@
 # Contrast
 
-Measure a foreground against the background it actually renders on, usually the nearest ancestor that paints a surface. A card's text is not necessarily on the page background.
+## WCAG Thresholds and Focus
 
-Use the project's required standard. Otherwise use WCAG 2.2 AA as the baseline; APCA may supplement text evaluation when suitable tooling is available. Label the metric and do not substitute one metric's score for another's requirement.
-
-## WCAG Contrast Thresholds
-
-WCAG 2 contrast ratios support formal WCAG conformance checks.
+Apply the project's required conformance level. These are WCAG 2.2 requirements, not interchangeable with APCA scores.
 
 | Content | AA | AAA |
 | --- | --- | --- |
 | Normal text | 4.5:1 | 7:1 |
-| Large text, at least `24px` regular or approximately `18.67px` bold | 3:1 | 4.5:1 |
-| Non-text UI or graphical information required to identify controls, states, or meaning | 3:1 against adjacent colors | No separate enhanced ratio |
+| Large text: at least `18pt` regular (`24` CSS px) or `14pt` bold | 3:1 | 4.5:1 |
+| Visual information required to identify controls, states, or meaningful graphics | 3:1 against adjacent colors | No separate enhanced ratio |
 
-Apply requirements to the information needed to identify a component or state, not indiscriminately to every decorative border.
+Use computed font size and weight. `14pt` equals `18 2/3` CSS px; do not round a smaller font into the large-text category.
 
-Inactive controls and logos have relevant exemptions. Placeholder text is not a blanket exemption: apply the text requirement when it conveys information. Disabled presentation can still be inspected for usability without inventing a required pass.
+- Apply non-text contrast to the information needed for identification, not every decorative border or gridline.
+- A hover, selected, or focused state must retain required contrast against adjacent colors. WCAG 1.4.11 does not generally require 3:1 between the default and changed states.
+- Inactive controls, logotypes, and incidental text have relevant exemptions. Identify the applicable exception rather than inventing a required pass. Placeholder text is not a blanket exemption.
+- Brand guidelines do not exempt ordinary body or control text.
 
-## Supplementary APCA Targets
+### Focus
 
-APCA's signed Lc value models text contrast differently from WCAG 2. These are working targets, not WCAG conformance thresholds or a replacement for APCA's font-size and weight guidance:
+- **AA:** keyboard focus must be visible (2.4.7). Author-styled focus information is subject to applicable non-text contrast (1.4.11). Focus must not be entirely hidden by author-created content (2.4.11).
+- **AAA:** Focus Appearance (2.4.13) additionally requires an indicator area at least equivalent to a `2` CSS px perimeter and at least 3:1 change between the same pixels in focused and unfocused states, subject to its exceptions.
+- Test indicators on the surfaces they actually touch. A two-color outline can help across variable backgrounds; a shadow-only ring may disappear in forced colors.
+- A color inspection alone does not establish keyboard operability or complete focus compliance.
 
-| Content | Starting target |
-| --- | --- |
-| Body text in columns or blocks | Lc 75, with Lc 90 preferred |
-| Labels and headlines | Lc 60 |
-| Large text, at least `36px` regular or `24px` bold | Lc 45 |
+## Measurement Contract
 
-For a project explicitly using APCA-like non-text heuristics, Lc 45 for fine outlines, Lc 30 for solid icons or controls, and Lc 15 for merely discernible dividers can guide inspection. They do not replace applicable WCAG non-text requirements.
+1. Resolve the foreground and the surface it actually renders on, including inheritance and theme aliases. The page background is not automatically the correct background.
+2. Resolve alpha, element opacity, `color-mix()`, relative colors, overlays, and gamut mapping. For images or gradients, inspect the worst region behind the foreground, not an average or just the endpoints.
+3. Use foreground/background colors obtained from computed styles or resolved source values. Do not sample antialiased glyph-edge pixels to calculate WCAG conformance; inspect thin text separately for usability.
+4. Compare the unrounded result with the applicable threshold. `4.499:1` fails `4.5:1`, even if a rounded display says `4.50`. Round only for reporting.
+5. After a change, remeasure the final serialized values and affected consumers, including relevant themes, states, fallbacks, and wider-gamut enhancements.
 
-Positive Lc means dark text on a light background; negative means light text on a dark background. Compare magnitude against the chosen target and retain polarity in the report. Measure both appearances independently.
+Record the standard/criterion and tool/version once per report unless they differ by pair. Each pair needs:
 
-Inactive text may use a legibility target such as Lc 30 without being reported as a WCAG requirement. If APCA is required but its tooling is unavailable, state `Not verified`; do not estimate a value.
+| Role / location | Theme / state | Resolved foreground / background | Metric / result | Threshold / exception | Verification |
+| --- | --- | --- | --- | --- | --- |
 
-## Fix a Failing Pair Within Authorized Scope
+Use `Pass`, `Fail`, `Exempt` with a reason, or `Not verified`. Identify declared-value versus rendered checks and any display-gamut assumptions. Never present an unresolved token or a guessed background as a measurement.
 
-During an audit, report the pair, measured result, required threshold, and proposed correction without editing colors. A request to improve or fix colors authorizes relevant corrections without a separate permission step. Broad palette consolidation or notation migration still needs its own scope.
+Without a browser, resolved solid pairs can still be computed. Layout, actual background selection, image content, uninspected states, and uncertain compositing remain `Not verified`. For variable surfaces, inspect their possible range or provide a stable surface that guarantees the pairing.
 
-When changes are authorized:
+## Correct a Failing Pair
 
-1. Adjust lightness first, keeping the intended hue and chroma where possible.
-2. If the foreground cannot meet the target on that surface, consider the background or another treatment rather than assuming black or white must pass.
-3. Reduce chroma if the adjustment leaves the target gamut.
-4. Remeasure every affected pair and inspect related states and themes.
+Within authorized scope:
 
-Mid-lightness backgrounds can limit achievable text contrast. Test alternatives instead of treating a fixed lightness delta as a guarantee.
+1. Try a lightness adjustment while preserving intended hue and role. OKLCH `L` is a perceptual coordinate, not WCAG relative luminance or a contrast ratio.
+2. Compare candidate foregrounds against the actual background. If needed, change the surface or treatment; a darker step or white label is not automatically safe.
+3. Check gamut, serialize to the project's notation, then repeat the measurement contract.
 
-## Choose Text Polarity by Measurement
+For opaque sRGB examples, white on `#3b82f6` measures about 3.68:1; white on `#2563eb` about 5.17:1. Only the latter meets AA for normal text. These are results for those literals, not guarantees about a framework's `500` or `600` token.
 
-Compare black and white using the required metric; the higher score does not necessarily meet the target. APCA and WCAG can prefer different treatments.
+## Optional APCA Evaluation
 
-For a neutral background at `oklch(65% 0 0)`, WCAG black contrast is about 6.49:1 and white contrast about 3.23:1. Only black passes AA for normal text. These values do not establish a crossover rule for colored backgrounds; measure the actual pair.
+- Use APCA for supplementary text evaluation when requested or established by the project. It is not a replacement for WCAG 2.2 and must not be presented as a finalized WCAG 3 requirement.
+- Record the implementation/version, signed Lc result, target source, and applicable font-size/weight guidance. Positive Lc denotes dark-on-light; negative denotes light-on-dark.
+- Do not apply a blanket Lc target to every label or transfer text targets to controls and borders. Keep project-specific non-text heuristics separate from conformance checks.
+- If required APCA tooling is unavailable, report `Not verified`, not an estimate.
 
-## What to Verify
+## Sources
 
-- **Every affected pair and appearance:** body text, controls, focus, hover, error, success, and other meaningful states within scope.
-- **Translucent surfaces:** composite against the actual background. For overlays or `backdrop-filter`, test the lightest and darkest content they can cover, or provide a sufficiently stable surface.
-- **Computed colors:** resolve `color-mix()`, relative colors, inherited values, and opacity before calculating contrast.
-- **Gradients and images:** measure the worst region behind the foreground, or establish a guaranteed pairing with a scrim or solid surface.
-- **Gamut:** check the value that reaches the target display, including fallbacks and wider-gamut enhancements.
-
-Without a browser, declared solid pairs can be computed if their values resolve. That does not verify layout, actual background selection, image content, or compositing. Report those limits explicitly as `Not verified`.
+- [WCAG 2.2 normative requirements](https://www.w3.org/TR/WCAG22/)
+- [Text contrast, exceptions, and precision](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html)
+- [Non-text contrast and state comparisons](https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast.html)
+- [Focus Appearance, Level AAA](https://www.w3.org/WAI/WCAG22/Understanding/focus-appearance.html)
+- [APCA guidance](https://git.apcacontrast.com/documentation/APCA_in_a_Nutshell)

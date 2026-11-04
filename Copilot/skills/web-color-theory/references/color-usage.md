@@ -1,135 +1,97 @@
 # Color Usage
 
-Apply the system through consistent meaning, intentional emphasis, and supported appearances. Use [palette generation](./palette-generation.md) for values, [token naming](./token-naming.md) for roles, and [contrast](./contrast.md) for pair measurements.
+## Meaning and Hierarchy
 
-## Consistent Meaning and Roles
-
-Use semantic colors consistently across the interface. If the accent communicates interaction, applying it indiscriminately to decorative headings weakens that signal. Neutral secondary controls are still valid when shape, labels, position, or other cues communicate their affordance.
-
-```css
-a {
-  color: var(--color-accent-text);
-}
-
-.section-title {
-  color: var(--color-text-primary);
-}
-```
-
-Do not borrow tokens across roles:
-
-```css
-/* Avoid: a theme can lighten separators without intending to lighten text. */
-.caption {
-  color: var(--color-border);
-}
-```
-
-Use an appropriate text token instead. Distinct semantic roles may share a value, but they must remain free to evolve independently.
-
-Never let color carry meaning alone. Use labels, icons, position, pattern, or shape for status and interaction cues, especially when nearby hues could be confused.
-
-## Primary Emphasis
-
-When filled color encodes primary emphasis, prefer one filled primary action per view or task group. Keep peers neutral unless the established design communicates hierarchy another way.
-
-```html
-<button class="bg-accent-solid text-text-on-accent">Save</button>
-<button class="text-text-secondary">Cancel</button>
-```
-
-A filled background usually communicates stronger emphasis than an accent-colored label. Use that distinction intentionally rather than forcing every primary action into a new style.
-
-Selected tabs, checked segments, categories, and distinct statuses are state or classification, not necessarily competing primary actions. Several colored backgrounds can be valid in those contexts.
+- Keep interaction, selection, and feedback meanings consistent. If an accent signals interaction, using it indiscriminately for decoration can weaken that signal.
+- Let area, lightness, and chroma establish emphasis. Low-chroma surfaces often support long-form content, but pure grays and strongly branded surfaces are valid when usable.
+- When filled color encodes primary emphasis, usually reserve it for one primary action per view or task group. Preserve an established alternative hierarchy.
+- Selected tabs, categories, and statuses are not necessarily competing primary actions.
+- Verify locale-specific conventions. For example, Chinese financial interfaces commonly use red for gains and green for losses. Use locale-aware gain/loss roles where needed, plus visible labels or icons.
 
 ## Gradients
 
-Interpolation space is a visual choice, not a correctness setting. Preserve an established gradient unless changing it is in scope.
+Interpolation space is a visual choice. Preserve an established gradient unless its change is in scope.
 
-```css
-/* sRGB gives the familiar legacy interpolation. */
-background: linear-gradient(in srgb, #3b82f6, #ec4899);
+| Space | Useful behavior | Check |
+| --- | --- | --- |
+| `in srgb` | Familiar legacy interpolation | Opposing hues may produce a muted midpoint |
+| `in oklab` | Useful default for a new perceptual transition | A path near the neutral axis may still become gray |
+| `in oklch` | A polar hue path with potentially vivid intermediate colors | Hue direction can introduce unwanted colors or leave gamut |
 
-/* Oklab is a useful default for a new perceptual transition. */
-background: linear-gradient(in oklab, #3b82f6, #ec4899);
-
-/* OKLCH follows a hue-wheel path and can retain a vivid midpoint. */
-background: linear-gradient(in oklch, #3b82f6, #ec4899);
-```
-
-sRGB and Oklab interpolate through a rectangular space. Opposing hues can pass near the neutral axis, producing a muted or gray midpoint. OKLCH follows a polar hue path instead, which can introduce intermediate hues the brief did not intend. Either choose that look or add an intermediate stop in the existing space.
+Choose the hue path intentionally:
 
 ```css
 background: linear-gradient(in oklch shorter hue, #3b82f6, #ec4899);
 background: linear-gradient(in oklch longer hue, #3b82f6, #ec4899);
 ```
 
-The longer path sweeps more of the hue wheel. Check the actual result rather than assuming polar interpolation is always preferable.
+- Add an intermediate stop when it produces the intended transition without changing an established interpolation model.
+- Check intermediate colors and gamut, not only endpoints. Verify syntax support for the project's browser matrix.
+- For banding, first reconsider the stop range or area. Add restrained noise only when the treatment fits the project.
+- Text over a gradient needs worst-region measurement or a guaranteed surface; see the [measurement contract](./contrast.md#measurement-contract).
 
-Large gradients can show banding. Consider changing the stop range, reducing the area, or using a restrained noise overlay when that treatment suits the project.
+## Supported Appearances
 
-Text over a gradient has no single background. Measure the worst region behind the text, not an average, or use a scrim or solid surface that guarantees the required pairing.
+Theme switching belongs in [palette generation](./palette-generation.md#theme-switching). For each supported appearance:
 
-## Color Across Cultures
+- Map every consumed semantic role deliberately. Primitive values can be shared when remapping already supplies the intended result.
+- Cover body text, links, controls, focus, hover, active/pressed, selected, disabled, error, and success states that the product renders.
+- Adapt `prefers-contrast: more` per light/dark appearance and explicit theme override. One shared adjustment can improve one pairing while worsening another.
+- Inspect on-accent text, surface separation, and meaningful state distinctions. A fixed lightness delta does not prove improvement.
 
-Verify semantic conventions in the locales the product ships to. For example, Chinese financial interfaces commonly show gains in red and losses in green, reversing the convention used by many English-language interfaces.
+### Forced Colors
 
-Where conventions differ, map gain and loss through locale-aware semantic tokens rather than hardcoded hues. Labels or icons must still communicate the meaning independently.
+`forced-colors: active` lets the user agent replace colors with a restricted system palette. It is not equivalent to `prefers-contrast: more` and should not become a separate decorative theme.
 
-## Light, Dark, and Increased Contrast
+- Prefer native semantics and system colors such as `CanvasText`, `ButtonText`, and `Highlight`. Added ARIA roles do not necessarily receive native elements' forced-color styling.
+- Check controls, focus, selection, and meaningful SVGs when gradients and shadows disappear. Canvas content needs separate inspection.
+- Add targeted borders or outlines when shadow-only affordances vanish. Do not blanket-disable user adjustments with `forced-color-adjust: none`.
+- A necessary exception, such as a color swatch, needs a narrow scope and an independent visible cue.
 
-Every rendered role needs a deliberate mapping in each supported appearance. Not every primitive needs a separate dark value if semantic remapping already supplies the correct result.
-
-Adapt increased-contrast values per appearance. This media-query example assumes existing blue primitives and a system-driven theme:
+For a control otherwise identified only by its shadow, a targeted fallback could be:
 
 ```css
-:root {
-  --color-accent-solid: var(--blue-600);
-}
-
-@media (prefers-contrast: more) {
-  :root {
-    --color-accent-solid: var(--blue-900);
-  }
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-accent-solid: var(--blue-400);
-  }
-}
-
-@media (prefers-color-scheme: dark) and (prefers-contrast: more) {
-  :root {
-    --color-accent-solid: var(--blue-200);
+@media (forced-colors: active) {
+  .shadow-only-button {
+    border: 1px solid ButtonText;
   }
 }
 ```
 
-Use the project's class or attribute selectors instead when users can override the system. Do not bolt this media-query strategy onto a conflicting toggle.
-
-A shared increased-contrast override can improve one appearance and worsen another. Widening the lightness difference by about `0.15` in OKLCH `L` can be a starting experiment, not a required step or proof of a pass. Remeasure the actual pair and inspect on-accent text, focus, and state distinctions as well.
-
 ## Audit Checklist
 
-Recommendations below apply within the requested change scope. Do not treat stylistic defaults or a different established convention as defects.
+Investigate actual behavior before reporting a defect. The core skill defines scope, permissions, and severity.
 
-| Pattern | Check or proposed correction |
+| Signal | Inspect |
 | --- | --- |
-| A literal in a component where an appropriate token exists | Reuse the role token in the project's notation |
-| One `oklch()` value in an otherwise hex system | Preserve the established notation unless a migration or documented exception is in scope |
-| A primitive such as `--blue-600` or `bg-blue-600` bypasses an existing semantic layer | Map its actual role and consume the semantic token |
-| A shared semantic name encodes a hue or one component | Prefer a role name; preserve intentional component-specific exceptions |
-| `primary` ambiguously names both brand and text roles | Clarify the role vocabulary; `accent` is a useful brand name for new systems |
-| A border token is used for text, or a text token for a background | Use or add the appropriate role token |
-| An HSL ramp varies only numeric lightness | Inspect perceived spacing and hue coherence; regenerate only if the result is unsuitable |
-| Pale steps have the same spacing as the middle | Inspect surface distinctions; finer light-end spacing is a default, not a requirement |
-| Every hue uses the same chroma | Check each hue's available gamut and intended visual weight |
-| A status hue is close to the accent | Inspect meaning and non-color cues; hue separation alone does not establish accessibility |
-| Dark tokens simply reverse the light ramp | Check chroma, surface separation, and every affected pair |
-| Media queries and a theme selector assign competing token sets | Make system preference and explicit overrides follow one coherent strategy |
-| A contrast fix changes hue but leaves lightness nearly unchanged | Try a lightness adjustment first, then remeasure |
-| One `prefers-contrast: more` override serves both appearances | Verify it increases required contrast in each; give appearances separate values where needed |
-| Text sits on an alpha color, mixed color, overlay, image, or gradient | Measure the resolved or rendered worst-case pair; consider a solid surface |
-| `text-white` sits on a Tailwind `500` fill | Measure it; a darker step may help, but no step number guarantees a pass |
-| A declared color exceeds the target gamut without an intentional fallback or enhancement plan | Supply a measured baseline and gate wider-gamut enhancement when needed |
+| A literal or primitive bypasses an existing semantic layer | Whether an appropriate role exists and theme mapping is lost |
+| A token serves unrelated jobs or has an ambiguous name | Whether consumers need independent evolution |
+| Near-duplicate values or many unused steps | Actual consumers and role distinctions before consolidation |
+| Equal HSL steps or shared chroma across hues | Perceptual spacing, required pairs, and target gamut |
+| Accent and feedback hues look similar | Visible non-hue cues and semantic clarity |
+| A dark ramp is merely reversed | Surface separation, accent vividness, and pair measurements |
+| Theme selectors and media queries overlap | System initialization versus explicit user choice |
+| Alpha, gradients, images, or derived CSS colors | Resolved values and worst-case backgrounds |
+| A color leaves the target gamut | Intentional mapping, fallbacks, and preserved distinctions |
+| A focus or selection cue relies on shadows | Forced-color behavior and required contrast |
+
+## Maintenance Checks
+
+When revising this skill, check local links/anchors, frontmatter discovery terms, and affected examples. Keep one authoritative explanation per rule; add a reference only for a distinct recurring task.
+
+Use these regression briefs to check that revised guidance still produces the intended decisions. They are review scenarios, not claims of automated or rendered verification.
+
+| Brief | Expected decision |
+| --- | --- |
+| A computed ratio is `4.499:1` against `4.5:1` | Fail before reporting rounded output |
+| A translucent label sits on variable content | Resolve the range or report the rendered check as `Not verified` |
+| A fixed brand fill fails normal white text | Preserve the fixed value; propose another role, label, or treatment |
+| System preference is dark but the user chose light | The explicit choice controls all related tokens |
+| A wide-gamut enhancement is unavailable | The chosen supported baseline remains usable and measured |
+| A focus ring or selected state disappears in forced colors | Report the lost cue and propose a targeted system-color treatment |
+| An audit lacks a required browser check | Report `Incomplete`, unless a verified blocking defect already requires `Block` |
+| A sequential chart uses a decorative triadic palette | Inspect ordering and non-hue cues rather than accepting harmony as evidence |
+
+For framework and color-tool examples, identify the relevant version or literal inputs and recheck when dependencies change. Check current browser support when adopting a feature; do not turn today's support status or experimental metrics into timeless rules.
+
+Sources: [MDN forced colors](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/At-rules/@media/forced-colors), [CSS Color 4 interpolation](https://www.w3.org/TR/css-color-4/#interpolation), and [W3C use of color](https://www.w3.org/WAI/WCAG22/Understanding/use-of-color.html).

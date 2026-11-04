@@ -1,6 +1,6 @@
 # Token Naming
 
-Expose [palette roles](./palette-structure.md) through names that survive theme changes. Preserve an existing coherent vocabulary; renaming an entire system is a migration, not a side effect of a local improvement.
+Expose [palette roles](./palette-structure.md) through names that survive theme changes. The CSS examples illustrate the layers; preserve an established token source or build pipeline.
 
 ## Primitives and Semantics
 
@@ -22,7 +22,7 @@ For a new multi-role palette, separate values from jobs:
 }
 ```
 
-Themes repoint the semantic layer so components keep their roles. Small existing systems with direct semantic values need not gain a primitive layer unless it solves a real problem.
+Themes repoint the semantic layer. Small systems with direct semantic values need not gain primitives unless that solves a real problem.
 
 A third, component-level tier such as `--color-button-danger-bg` is justified when a component intentionally diverges from a shared role. Many such exceptions suggest missing semantic roles.
 
@@ -39,8 +39,6 @@ Use this inventory to inspect supported components, not to manufacture unused to
 | Status | For each shipped status: subtle background, border, solid, text |
 
 Separate roles can point at the same primitive today. A separator divides content; a border encloses a control. Give them separate semantic names when they need independent evolution.
-
-Never borrow a border token for a caption or a text token for a background just because the current value fits. Reuse an existing appropriate role or add the missing role.
 
 ## Naming Grammar
 
@@ -66,18 +64,16 @@ For a new vocabulary, reserve `primary` for prominence within a group, such as `
 
 | Pattern | Risk | Suggested role |
 | --- | --- | --- |
-| `--color-blue-button` | Semantic name fixes both hue and component | `--color-accent-solid` |
-| `--color-sidebar-gray` | A shared role is named after one location | `--color-bg-surface` |
-| `--color-light-gray` | Lightness label becomes misleading across themes | A hue-step primitive or a semantic role |
-| `--color-text-2` | Number does not explain the job | `--color-text-secondary` |
-| `--color-gray-hover` | Hue and state are mixed without a role | `--color-bg-surface-hover` |
+| `--color-blue-button` | A shared semantic name fixes hue and component | `--color-accent-solid` |
+| `--color-light-gray` | Appearance label becomes misleading across themes | A hue-step primitive or a semantic role |
+| `--color-gray-hover` | Hue and state lack an explicit job | `--color-bg-surface-hover` |
 | A raw primitive in a component with an established semantic layer | Component bypasses theme mapping | The appropriate semantic token |
 
 These are reasons to inspect meaning and scope, not instructions to rename every occurrence without permission.
 
 ## Tailwind Projects
 
-Tailwind v4 generates utilities from the `--color-*` namespace in `@theme`. Both primitive and semantic utilities remain reachable:
+Tailwind v4 generates utilities from the `--color-*` namespace in `@theme`. This example defines its own sRGB literals; it does not assert current default palette values. Both primitive and semantic utilities remain reachable:
 
 ```css
 @theme {
@@ -100,6 +96,10 @@ This yields utilities such as `bg-accent-solid` and `text-text-secondary`. The d
 
 For this runtime semantic-override pattern, leave `@theme` without `inline` so generated utilities reference the semantic variable. Keep theme overrides in the established selector outside `@theme`; do not adopt this class example if the project uses another switching strategy.
 
+When instead exposing an existing variable through `@theme inline`, generated utilities reference that variable directly. Choose the pattern based on which variable changes at runtime; do not mechanically switch between them. Custom-property aliases resolve where declared, so check nested theme scopes rather than assuming a root alias tracks every descendant override.
+
 Templates use semantic utilities when the project has that layer. Raw `bg-blue-600` is a candidate for role mapping, not permission for an unrequested architecture migration.
 
 Opacity modifiers such as `bg-accent-solid/50` change the rendered pair. Measure the composite on its actual background, or choose a solid token when variable backgrounds would make text contrast unreliable.
+
+Sources: [Tailwind theme variables and inline aliases](https://tailwindcss.com/docs/theme) and [Tailwind color values](https://tailwindcss.com/docs/colors).

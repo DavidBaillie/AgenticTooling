@@ -1,6 +1,6 @@
 # Color Formats and Gamut
 
-Match the project's notation. Perceptual generation and measurement can happen internally without changing the format written to source files.
+Perceptual computation does not require changing source notation. Match the project's format and browser matrix.
 
 ## Choose a Notation
 
@@ -11,7 +11,7 @@ Match the project's notation. Perceptual generation and measurement can happen i
 | `hsl()` | Hue-based authoring | Equal lightness steps are not perceptually equal |
 | `oklch()` | Perceptual lightness, hue, and chroma adjustments | Older browser matrices may need fallbacks |
 
-A consistent hex system is better than an unrequested mixture of notations. For a genuinely new system, OKLCH is a useful default when the browser matrix supports it.
+For a new system, OKLCH is a useful default when supported. Consistent hex remains valid.
 
 In `oklch(L C H / alpha)`, `L` is lightness from `0` to `1` or a percentage, `C` is chroma, and `H` is a hue angle in degrees. Chroma has no single safe maximum: available gamut depends on hue and lightness.
 
@@ -25,32 +25,21 @@ Convert when requested or when an approved migration standardizes the system. Ch
 - Preserve comments and formatting.
 - Use tooling and check rounding, alpha, and gamut; do not estimate equivalents.
 
-For example, this conversion preserves the sRGB blue within rounding precision:
+Conversions can introduce rounding differences. Check the final serialized values, not just high-precision intermediates.
 
-```css
-/* Before */
-color: #3b82f6;
-border: 1px solid rgba(0, 0, 0, 0.1);
+## Gamut and Fallbacks
 
-/* After */
-color: oklch(0.623083 0.188015 259.814527);
-border: 1px solid oklch(0 0 0 / 0.1);
-```
+Display P3 contains colors outside sRGB. Notation does not establish gamut: an `oklch()` value can be inside or outside either target.
 
-Bulk conversion is a migration. It can introduce rounding differences and touches otherwise unrelated surfaces, so do not make it incidental cleanup.
-
-## Gamut
-
-Display P3 contains colors outside sRGB. Maximum chroma varies by hue and lightness, so one chroma value copied across a ramp can be renderable at some steps and outside the target gamut at others.
-
-Browser gamut mapping may reduce or flatten distinctions. Check the target gamut with tooling instead of inferring it from appearance or notation.
+Inspect candidates before serialization or clamping. Mapping can flatten distinctions, so inspect role separation afterward as well as contrast.
 
 For an sRGB baseline:
 
-- Generate and check values in sRGB.
-- Reduce chroma first when keeping lightness and hue is important.
-- Add wider-gamut values as an intentional enhancement, not an accidental dependency.
-- Recheck contrast after any mapping or enhancement.
+- Generate candidates in the chosen space and verify sRGB renderability.
+- Reduce chroma first when preserving lightness and hue matters; document another mapping when needed.
+- Supply a chosen sRGB baseline before intentional wider-gamut enhancements.
+- Distinguish syntax support (`@supports`) from display gamut (`color-gamut`). One does not establish the other.
+- Remeasure the final baseline and enhancement independently.
 
 ```css
 :root {
@@ -58,35 +47,25 @@ For an sRGB baseline:
   --color-success-solid: var(--green-9);
 }
 
-@media (color-gamut: p3) {
-  :root {
-    --green-9: oklch(0.65 0.27 145);
+@supports (color: color(display-p3 0 1 0)) {
+  @media (color-gamut: p3) {
+    :root {
+      --green-9: color(display-p3 0.1 0.7 0.2);
+    }
   }
 }
 ```
 
-The second value is a deliberately more vivid enhancement, not an equivalent format conversion. Declare the sRGB baseline first so a narrower-gamut display gets a chosen value. A documented display-restricted product may use a different baseline.
+The second value intentionally changes the color; it is not an equivalent conversion or a certified text pairing. A documented display-restricted product may use another baseline.
 
-Syntax support is a separate concern. If the browser matrix predates `oklch()`, layer a supported fallback:
-
-```css
-:root {
-  --blue-600: #2563eb;
-}
-
-@supports (color: oklch(0 0 0)) {
-  :root {
-    --blue-600: oklch(0.546150 0.215208 262.880917);
-  }
-}
-```
-
-Do not add obsolete-browser fallbacks when the target matrix does not need them.
+For unsupported syntax, guard modern custom-property assignments with `@supports`; an unrecognized color stored in a custom property can fail only when consumed, so repeated assignments alone are not a reliable fallback. Add compatibility layers only when the target matrix needs them.
 
 ## Derived CSS Colors
 
 - **`color-mix()`** can derive a tint, for example `color-mix(in oklab, var(--color-accent-solid) 15%, white)`. Use it when project tooling supports the result; prefer resolved primitive values when export or inspection requires them.
 - **Relative color syntax**, such as `oklch(from var(--color-accent-solid) calc(l - 0.1) c h)`, adjusts an existing color. Keep derivations shallow and check gamut after channel changes.
-- **`light-dark()`** selects values through `color-scheme`. See [theme switching](./palette-generation.md#choose-one-coherent-switching-strategy).
+- **`light-dark()`** selects values through `color-scheme`. See [theme switching](./palette-generation.md#theme-switching).
 
 Resolve these values with suitable tooling or measure their rendered output before reporting contrast. Inspect the project's support matrix rather than assuming all modern color functions have identical support.
+
+Sources: [CSS Color 4](https://www.w3.org/TR/css-color-4/), [CSS Color 5 derived colors](https://www.w3.org/TR/css-color-5/), and [MDN color-gamut](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/At-rules/@media/color-gamut). CSS Color 5 is evolving; check feature-specific support rather than treating the whole draft as universally available.

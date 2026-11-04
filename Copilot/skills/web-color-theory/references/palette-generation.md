@@ -1,97 +1,46 @@
 # Palette Generation
 
-Generate values after deciding [palette structure](./palette-structure.md). Compute in a perceptual space and emit the project's notation.
+Generate values after deciding [palette structure](./palette-structure.md). A local fix may need only another existing role mapping, not a new ramp.
 
 ## Start from the Brand Color
 
-Determine the brand color's intended role before building a ramp.
-
-- If it supports the intended label contrast, it may occupy the solid-fill step, often Tailwind `600` or Radix `9`.
-- Pin a contractually fixed value exactly and build around it. Uneven spacing is preferable to silently changing the brand.
-- Snap a flexible seed to a regular ramp only when adjustment is allowed.
-- If the seed fails the intended text pairing, retain it for another role and select a suitable fill or label treatment.
-
-For example, `#3b82f6` is Tailwind blue `500`, not a safe fill for normal white text: the pair measures 3.68:1. White on the existing blue `600`, `#2563eb`, measures 5.17:1. Do not generalize that result to every `600`.
+Determine the seed's role before building around it. Pin a fixed brand value exactly, even if spacing becomes uneven. A flexible seed may move only when adjustment is allowed. If the seed cannot support its intended label, choose another role, fill, or label treatment.
 
 ## Useful Ramp Properties
 
 These are starting criteria, not conformance thresholds:
 
-- **Lightness moves steadily.** Measure OKLCH `L`, from `0` to `1`, rather than treating HSL lightness as perceptual.
+- **Lightness follows the role convention.** OKLCH `L`, from `0` to `1`, is useful for perceptual ordering; HSL lightness is not perceptually uniform. A role-based scale is not necessarily one monotonic ramp.
 - **Hue stays coherent within a ramp.** Start with a constant hue. Deliberate hue shifts may suit an established scale; inspect them rather than rejecting them automatically.
 - **Chroma usually peaks near the middle.** Pale and dark extremes typically need less chroma to remain usable and in gamut.
-- **Light-end steps are often finer.** As a starting point, `50` to `200` might differ by `0.04` to `0.05` in `L`, compared with `0.07` to `0.10` near the middle. Roles and measured pairs decide the final spacing.
-- **Adjacent steps need a reason to differ.** Steps less than about `0.03` apart in `L` deserve inspection, but small surface distinctions may be intentional.
+- **Spacing serves a role.** Subtle surfaces may need finer differences than action fills. Judge useful distinctions at actual component sizes instead of enforcing a fixed lightness delta.
 - **Tinted endpoints often stop short of black and white.** Pure black or white remain valid when the design or contrast requirements call for them.
 
-## Use Color Tooling
+## Generate, Inspect, Then Serialize
 
-Use an available color library or verified tool rather than inventing values by eye. `culori`, `colorjs.io`, and `chroma.js` support conversion and perceptual interpolation. Do not add a dependency merely because this reference names it.
+Use an available, verified tool such as `culori`, `colorjs.io`, or `chroma.js`; record the version when reporting results.
 
-With `culori` already available:
+1. Assign consumed steps to roles and preserve fixed inputs.
+2. Compute candidates in a suitable perceptual space, commonly OKLCH or OKLab. Interpolation and equally spaced samples produce candidates, not a validated role scale.
+3. Inspect the unrounded candidates for spacing, hue coherence, and target gamut. Do not serialize to clamped hex before checking for out-of-gamut values.
+4. Apply an intentional [gamut treatment](./color-formats.md#gamut-and-fallbacks) where needed, then emit the project's notation and precision.
+5. Measure the final emitted pairs using the [measurement contract](./contrast.md#measurement-contract). Rounding or mapping can change a marginal result.
 
-```js
-import { formatHex, interpolate, samples } from 'culori'
-
-const ramp = interpolate(['#eff6ff', '#3b82f6', '#172554'], 'oklab')
-const steps = samples(11).map((t) => formatHex(ramp(t)))
-```
-
-This is a candidate ramp, not a validated one. Linear sampling does not enforce constant OKLCH hue, role-specific spacing, or gamut limits. Inspect the result, adjust samples, and regenerate before using it.
-
-For comparison, a familiar Tailwind blue scale is:
-
-```css
-:root {
-  --blue-50: #eff6ff;
-  --blue-100: #dbeafe;
-  --blue-200: #bfdbfe;
-  --blue-300: #93c5fd;
-  --blue-400: #60a5fa;
-  --blue-500: #3b82f6;
-  --blue-600: #2563eb;
-  --blue-700: #1d4ed8;
-  --blue-800: #1e40af;
-  --blue-900: #1e3a8a;
-  --blue-950: #172554;
-}
-```
-
-Keep only the steps the project needs. A reference scale is not a requirement to generate every step.
-
-Ramp interpolation should support usable perceptual steps. Decorative [gradients](./color-usage.md#gradients) are a different case: their interpolation space is a deliberate visual choice.
+Decorative [gradients](./color-usage.md#gradients) are a different use of interpolation; their visual path need not satisfy ramp-role spacing.
 
 ## Several Hues at Once
 
-Compare ramps at equivalent roles so status and accent treatments have intentional visual weight.
-
-- Similar perceived lightness is a useful starting point across hue families, not a reason to sacrifice required contrast.
-- Match vividness relative to each hue's available gamut, not by copying one chroma value everywhere.
-- Maximum available chroma varies with both hue and lightness. Recheck each step in the target gamut rather than assuming a shared saturation or chroma is safe.
+Compare equivalent roles, not just matching numeric steps. Similar perceived lightness can help balance visual weight, but required contrast takes precedence. Available chroma depends on hue and lightness, so copying one chroma across families does not ensure equal vividness or a shared gamut.
 
 ## Dark Mode
 
-A reversed light ramp is a starting point, not a finished dark theme. Repoint semantic roles first:
-
-```css
-:root {
-  --color-bg-page: var(--neutral-50);
-  --color-text-primary: var(--neutral-950);
-}
-
-.dark {
-  --color-bg-page: var(--neutral-950);
-  --color-text-primary: var(--neutral-50);
-}
-```
-
-Using the project's existing neutral primitives, inspect:
+A reversed light ramp is not a finished dark theme. Repoint semantic roles, then inspect:
 
 - **Chroma:** an accent may look excessively vivid on a near-black surface. Reduce it when needed, not automatically.
 - **Surface separation:** dark surface roles may need wider spacing than a mirrored light scale provides.
 - **Contrast:** remeasure every affected pair. Passing in one appearance does not establish a pass in another.
 
-### Choose One Coherent Switching Strategy
+## Theme Switching
 
 - Use `prefers-color-scheme` alone when the interface follows the system and has no override.
 - Use the established class or attribute strategy when users can choose an appearance. System preference may initialize the choice, but must not fight the explicit override.
@@ -105,3 +54,5 @@ Using the project's existing neutral primitives, inspect:
 ```
 
 Do not let independent media-query and class-based token sets produce a half-themed interface. Check system, explicit light, explicit dark, and any increased-contrast variants that the product supports.
+
+Sources: [CSS Color 4 perceptual spaces and gamut](https://www.w3.org/TR/css-color-4/) and [MDN light-dark()](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Values/color_value/light-dark).
